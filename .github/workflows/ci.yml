@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Package.swift declares swift-tools-version 6.2, which needs Xcode 26.
+      # Runner images ship several Xcodes and default to an older one, so pick
+      # the newest available and print it — if the build fails for want of a
+      # toolchain, the log says so outright instead of looking like a code error.
+      - name: Select newest Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          swift --version
+
+      - name: Build
+        run: swift build
+
+      # No network, no Keychain, no database of their own — see README.
+      - name: Test
+        run: swift test
