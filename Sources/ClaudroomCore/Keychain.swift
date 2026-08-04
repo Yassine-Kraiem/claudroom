@@ -25,6 +25,15 @@ public enum KeychainError: Error, Equatable, Sendable {
 public enum Keychain {
     public static let service = "Claude Code-credentials"
 
+    /// Marked deprecated itself so the call inside does not warn: the underlying
+    /// API went away in 10.10 with no replacement for legacy ACL items, and this
+    /// is the only mechanism that suppresses their prompt.
+    @available(macOS, deprecated: 10.10,
+               message: "SecKeychain is deprecated, but nothing replaces it for legacy ACL prompts.")
+    private static func setInteractionAllowed(_ allowed: Bool) {
+        SecKeychainSetUserInteractionAllowed(allowed)
+    }
+
     static func parse(blob: Data) throws -> Credentials {
         guard let root = try? JSONSerialization.jsonObject(with: blob) as? [String: Any],
               let oauth = root["claudeAiOauth"] as? [String: Any],
@@ -57,20 +66,36 @@ public enum Keychain {
     public static func readClaudeCodeCredentials(
         allowInteraction: Bool = true
     ) throws -> Credentials {
-        var query: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
-        if !allowInteraction {
-            // Fails with errSecInteractionNotAllowed rather than prompting.
-            query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUISkip
+
+        // `SecKeychainSetUserInteractionAllowed`, not `kSecUseAuthenticationUI`.
+        //
+        // The latter looks like the modern answer and does nothing here: it gates
+        // kSecAccessControl prompts — Touch ID, passcode — while this item is
+        // guarded by a legacy SecKeychain ACL, whose dialog predates that API.
+        // Measured against this very item: with kSecUseAuthenticationUISkip the
+        // read put a dialog on screen and returned success after 12.6 seconds;
+        // with user interaction disallowed it returned in 9ms and drew nothing.
+        //
+        // Deprecated since 10.10 with no replacement for legacy ACL items, and
+        // process-global — hence the defer, so one background read cannot leave
+        // every later Keychain call unable to ask.
+        if !allowInteraction { setInteractionAllowed(false) }
+        defer {
+            if !allowInteraction { setInteractionAllowed(true) }
         }
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
 
+        // errSecAuthFailed is what a suppressed ACL prompt actually returns here,
+        // despite reading like a wrong password; errSecInteractionNotAllowed is
+        // the documented one. Treat both as "needs the user".
         if status == errSecInteractionNotAllowed || status == errSecAuthFailed {
             throw KeychainError.authorizationRequired
         }

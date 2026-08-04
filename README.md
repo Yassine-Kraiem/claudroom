@@ -157,7 +157,16 @@ authorisation is needed again every few hours. Claudroom keeps its own copy of t
 token to make that rare, but a copy still expires. The part that matters is *when*
 the request happens: background polls pass `kSecUseAuthenticationUISkip`, so they
 fail with `errSecInteractionNotAllowed` rather than putting a password dialog over
-whatever you were doing for an app you were not looking at. The popover shows
+whatever you were doing for an app you were not looking at.
+
+The mechanism is `SecKeychainSetUserInteractionAllowed(false)`, not the
+modern-looking `kSecUseAuthenticationUI`. That one gates `kSecAccessControl`
+prompts — Touch ID, passcode — and does nothing for a legacy SecKeychain ACL,
+whose dialog predates it. Measured against this exact item: with
+`kSecUseAuthenticationUISkip` the read drew a dialog and returned after 12.6
+seconds; with user interaction disallowed it returned in 9ms and drew nothing.
+`swift run ClaudroomShot --keychain-check` re-runs that measurement against the
+shipping function. The popover shows
 *Keychain access needed* instead, and the dialog appears only when you press
 *Reconnect*.
 

@@ -74,6 +74,30 @@ func glyphSheet(to path: String) -> Int32 {
     return 0
 }
 
+/// Dev tool: proves a background-shaped read cannot raise the Keychain dialog.
+///
+/// This calls the real shipping function rather than a copy of it, because the
+/// bug it guards was a wrong API that looked correct — the check is only worth
+/// anything if it exercises the code that ships.
+@MainActor
+func keychainCheck() -> Int32 {
+    let started = Date()
+    do {
+        _ = try Keychain.readClaudeCodeCredentials(allowInteraction: false)
+        print("read succeeded in \(Int(Date().timeIntervalSince(started) * 1000))ms (already authorised)")
+    } catch KeychainError.authorizationRequired {
+        let ms = Int(Date().timeIntervalSince(started) * 1000)
+        print("authorizationRequired in \(ms)ms — no dialog; the poll backs off and the popover asks")
+        if ms > 2000 {
+            print("  WARNING: that took long enough to suggest a dialog appeared")
+            return 1
+        }
+    } catch {
+        print("\(error)")
+    }
+    return 0
+}
+
 /// Dev tool: drives the historical backfill from the command line so it can be
 /// verified and timed without clicking through the UI.
 @MainActor
@@ -181,6 +205,9 @@ func render() async -> Int32 {
 
 if CommandLine.arguments.contains("--backfill") {
     exit(await backfill())
+}
+if CommandLine.arguments.contains("--keychain-check") {
+    exit(await keychainCheck())
 }
 if CommandLine.arguments.contains("--glyphs") {
     let out = CommandLine.arguments.dropFirst().first { !$0.hasPrefix("--") }
