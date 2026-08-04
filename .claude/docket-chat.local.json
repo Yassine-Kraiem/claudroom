@@ -1,0 +1,53 @@
+{
+  "sessionId": "f0c2f0e5-6797-44c3-a53f-67df3d9b1621",
+  "messages": [
+    {
+      "id": "ms6hcdhk-cpaw",
+      "role": "user",
+      "text": "In one short sentence, what is this project?",
+      "timestamp": "2026-07-29T19:30:43.400Z"
+    },
+    {
+      "id": "ms6hclh4-5e22",
+      "role": "tool",
+      "text": "Running Bash…",
+      "timestamp": "2026-07-29T19:30:53.752Z"
+    },
+    {
+      "id": "ms6hcnjg-c48t",
+      "role": "tool",
+      "text": "Running Read…",
+      "timestamp": "2026-07-29T19:30:56.428Z"
+    },
+    {
+      "id": "ms6hcpa8-6jq4",
+      "role": "assistant",
+      "text": "Claudroom is a macOS menu bar app (Swift) that tracks Claude Max usage capacity — showing how much is left, where it went, and whether you're on the right plan.",
+      "timestamp": "2026-07-29T19:30:58.688Z"
+    },
+    {
+      "id": "ms6k08si-jvev",
+      "role": "user",
+      "text": "Create a file called docket-test.txt in this repo containing the text OK, no need to ask, just do it.",
+      "timestamp": "2026-07-29T20:45:16.290Z"
+    },
+    {
+      "id": "ms6k0euk-2htx",
+      "role": "assistant",
+      "text": "I'll create the file now.",
+      "timestamp": "2026-07-29T20:45:24.140Z"
+    },
+    {
+      "id": "ms6k0fig-gjfx",
+      "role": "tool",
+      "text": "Running Write…",
+      "timestamp": "2026-07-29T20:45:25.000Z"
+    },
+    {
+      "id": "ms6k0hih-1x52",
+      "role": "assistant",
+      "text": "Created `docket-test.txt` with the content \"OK\".",
+      "timestamp": "2026-07-29T20:45:27.593Z"
+    }
+  ]
+}

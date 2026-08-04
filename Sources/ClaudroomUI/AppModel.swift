@@ -12,6 +12,9 @@ public final class AppModel {
     public private(set) var lastSuccess: Date?
     public private(set) var lastError: String?
     public private(set) var hasCredentials = true
+    /// Claude Code's Keychain item needs authorising again. Not an error — a
+    /// decision waiting for the user, so nothing retries into it automatically.
+    public private(set) var needsAuthorization = false
     public private(set) var tier: PlanTier?
     public private(set) var modelUsage: [ModelUsageRow] = []
     public private(set) var isScanning = false
@@ -362,8 +365,18 @@ public final class AppModel {
         do {
             creds = try credentials(now: now)
             hasCredentials = true
+        } catch KeychainError.authorizationRequired {
+            // The credential is there; we just declined to interrupt for it.
+            // Distinct from being signed out, and it must not read as an error —
+            // otherwise the popover tells people to run `claude` when the real
+            // answer is one click.
+            hasCredentials = true
+            lastError = nil
+            recompute(now: now)
+            return false
         } catch {
             hasCredentials = false
+            needsAuthorization = false
             lastError = "Not signed in to Claude Code"
             recompute(now: now)
             return false
@@ -419,7 +432,11 @@ public final class AppModel {
     private static let credentialBlindCacheLifetime: TimeInterval = 30 * 60
     private var credentialsReadAt: Date?
 
-    private func credentials(now: Date) throws -> Credentials {
+    /// `allowInteraction` must be false for anything a timer started. Claude Code
+    /// drops Claudroom from its item's ACL every time it refreshes, so this read
+    /// needs authorising every few hours — and a background poll asking for it is
+    /// what puts a password dialog over whatever the user was actually doing.
+    private func credentials(now: Date, allowInteraction: Bool = false) throws -> Credentials {
         if let cached = cachedCredentials, isUsable(cached, now: now) { return cached }
 
         // Our own Keychain item, which survives app restarts and never prompts
@@ -427,16 +444,47 @@ public final class AppModel {
         if let stored = CredentialCache.load(), isUsable(stored, now: now) {
             cachedCredentials = stored
             credentialsReadAt = now
+            needsAuthorization = false
             return stored
         }
 
         // Only now do we touch Claude Code's item — the one whose ACL keeps being
         // reset, and therefore the one that can raise an authorisation prompt.
-        let fresh = try Keychain.readClaudeCodeCredentials()
-        cachedCredentials = fresh
-        credentialsReadAt = now
-        CredentialCache.save(fresh)
-        return fresh
+        do {
+            let fresh = try Keychain.readClaudeCodeCredentials(allowInteraction: allowInteraction)
+            cachedCredentials = fresh
+            credentialsReadAt = now
+            needsAuthorization = false
+            CredentialCache.save(fresh)
+            return fresh
+        } catch KeychainError.authorizationRequired {
+            // Not an error state to retry into — it is a decision waiting for the
+            // user. Surfaced in the popover with a button, and polling backs off
+            // rather than hammering a dialog that will not appear.
+            needsAuthorization = true
+            throw KeychainError.authorizationRequired
+        }
+    }
+
+    /// Reads Claude Code's item *with* the authorisation dialog allowed. Only ever
+    /// called from an explicit user action, so the prompt appears when the user is
+    /// looking at Claudroom rather than mid-sentence in another app.
+    public func authorizeNow() async {
+        needsAuthorization = false
+        do {
+            let fresh = try Keychain.readClaudeCodeCredentials(allowInteraction: true)
+            cachedCredentials = fresh
+            credentialsReadAt = Date()
+            CredentialCache.save(fresh)
+            hasCredentials = true
+            lastError = nil
+            await pollOnce()
+        } catch KeychainError.authorizationRequired {
+            // Cancelled or denied. Leave the banner up; do not retry unasked.
+            needsAuthorization = true
+        } catch {
+            hasCredentials = false
+        }
     }
 
     private func isUsable(_ credentials: Credentials, now: Date) -> Bool {

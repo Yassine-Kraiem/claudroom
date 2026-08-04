@@ -42,3 +42,28 @@ import Foundation
     #expect(CredentialCache.service != Keychain.service)
     #expect(CredentialCache.service.hasPrefix("com.yassinekraiem.claudroom"))
 }
+
+@Suite struct KeychainInteractionTests {
+
+    /// `authorizationRequired` exists so callers can tell "you are signed out"
+    /// from "I chose not to interrupt you". Collapsing them is what made the
+    /// popover tell people to run `claude` when the real fix was one click.
+    @Test func authorizationRequiredIsItsOwnState() {
+        #expect(KeychainError.authorizationRequired != KeychainError.notFound)
+        #expect(KeychainError.authorizationRequired != KeychainError.malformed)
+    }
+
+    // Neither read path is exercised here, on purpose.
+    //
+    // The interactive one raised a real Keychain dialog and hung the suite until
+    // it was dismissed — which is precisely the behaviour this change keeps out of
+    // the background, and the reason `swift test` must never reach it.
+    //
+    // The non-interactive one does not prompt, but it still queries the real
+    // Keychain: 4s on a machine that has Claude Code installed, and a different
+    // result on one that does not. A test whose outcome depends on whether the
+    // developer uses Claude Code is not a test. The guarantee that matters —
+    // background callers pass allowInteraction: false — is enforced by that
+    // argument being required at every call site, and read at the one place it
+    // is passed in AppModel.credentials(now:allowInteraction:).
+}

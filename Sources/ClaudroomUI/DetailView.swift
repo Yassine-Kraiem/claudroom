@@ -18,6 +18,10 @@ public struct DetailView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            if model.needsAuthorization {
+                Divider().padding(.vertical, 10)
+                authorizationBanner
+            }
             Divider().padding(.vertical, 10)
             capacity
             Divider().padding(.vertical, 10)
@@ -58,6 +62,35 @@ public struct DetailView: View {
                     .background(.quaternary, in: Capsule())
             }
         }
+    }
+
+    /// Claude Code drops Claudroom from its Keychain item's ACL every time it
+    /// refreshes its token, so authorisation is needed again every few hours.
+    /// Background polls never ask — they would put a password dialog over whatever
+    /// the user is doing, for an app they are not looking at. It waits here
+    /// instead, and the dialog only appears because a button was pressed.
+    private var authorizationBanner: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 5) {
+                Image(systemName: "lock")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Palette.clay)
+                Text("Keychain access needed")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Palette.ink)
+            }
+            Text("Claude Code refreshed its token, which resets the permission. Numbers are the last known reading until you reconnect.")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Reconnect") {
+                Task { await model.authorizeNow() }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .tint(Palette.clay)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Capacity — the weekly cap is the budget, the 5h window is a rate limit

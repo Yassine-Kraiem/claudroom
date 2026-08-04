@@ -16,6 +16,10 @@ public struct Credentials: Sendable, Equatable {
 public enum KeychainError: Error, Equatable, Sendable {
     case notFound
     case malformed
+    /// The item exists but reading it needs the user to authorise, and the caller
+    /// asked not to show UI. Distinct from `notFound`: nothing is wrong, we simply
+    /// declined to interrupt.
+    case authorizationRequired
 }
 
 public enum Keychain {
@@ -39,15 +43,37 @@ public enum Keychain {
     /// Read-only by design. This package never writes to the Keychain and never
     /// refreshes a token: if Anthropic rotates refresh tokens on use, refreshing
     /// here would invalidate Claude Code's own credentials and log the user out.
-    public static func readClaudeCodeCredentials() throws -> Credentials {
-        let query: [String: Any] = [
+    ///
+    /// `allowInteraction` decides whether macOS may put an authorisation dialog on
+    /// screen. It must be `false` for anything a timer started.
+    ///
+    /// Claude Code rewrites this item whenever it refreshes its token, and the
+    /// rewrite drops Claudroom from the item's ACL — so "Always Allow" genuinely
+    /// does not stick, and authorisation is needed again every few hours. A
+    /// background poll that asks for it produces exactly the failure people report:
+    /// a password dialog appearing over whatever they were doing, for an app they
+    /// were not using. Declining to show UI turns that into a state the app can
+    /// display and the user can resolve when it suits them.
+    public static func readClaudeCodeCredentials(
+        allowInteraction: Bool = true
+    ) throws -> Credentials {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
+        if !allowInteraction {
+            // Fails with errSecInteractionNotAllowed rather than prompting.
+            query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUISkip
+        }
+
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
+
+        if status == errSecInteractionNotAllowed || status == errSecAuthFailed {
+            throw KeychainError.authorizationRequired
+        }
         guard status == errSecSuccess, let data = item as? Data else {
             throw KeychainError.notFound
         }

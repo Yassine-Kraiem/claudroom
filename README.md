@@ -7,10 +7,10 @@
 **A macOS menu bar app for Claude Max: how much capacity is left, where it went,
 and whether you are on the right plan.**
 
-[![CI](https://github.com/yassine12-12/claudroom/actions/workflows/ci.yml/badge.svg)](https://github.com/yassine12-12/claudroom/actions/workflows/ci.yml)
+[![CI](https://github.com/Yassine-Kraiem/claudroom/actions/workflows/ci.yml/badge.svg)](https://github.com/Yassine-Kraiem/claudroom/actions/workflows/ci.yml)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-1c1c1e?logo=apple)
 ![Swift 6.2](https://img.shields.io/badge/Swift-6.2-D97757)
-![Tests](https://img.shields.io/badge/tests-212%20passing-4a7c59)
+![Tests](https://img.shields.io/badge/tests-213%20passing-4a7c59)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-4a7c59)
 ![Licence](https://img.shields.io/badge/licence-MIT-6b7280)
 
@@ -38,7 +38,7 @@ would have covered you.
 | Plan | Built and tested on Max 5x. Pro and Max 20x are handled but unverified. |
 
 ```bash
-git clone https://github.com/yassine12-12/claudroom.git
+git clone https://github.com/Yassine-Kraiem/claudroom.git
 cd claudroom
 ./Scripts/bundle.sh release
 open Claudroom.app
@@ -150,6 +150,17 @@ hyphen or underscore cannot be recovered from it. Paths are rolled up to the
 project root, since `cwd` changes as you move around inside a session and would
 otherwise fragment one project across every directory visited.
 
+**The Keychain prompt only ever appears because you asked for it.** Claude Code
+rewrites its credential item whenever it refreshes its token, and the rewrite drops
+Claudroom from that item's ACL — so *Always Allow* genuinely does not stick, and
+authorisation is needed again every few hours. Claudroom keeps its own copy of the
+token to make that rare, but a copy still expires. The part that matters is *when*
+the request happens: background polls pass `kSecUseAuthenticationUISkip`, so they
+fail with `errSecInteractionNotAllowed` rather than putting a password dialog over
+whatever you were doing for an app you were not looking at. The popover shows
+*Keychain access needed* instead, and the dialog appears only when you press
+*Reconnect*.
+
 **Claude Code's credential is read-only and no token is ever refreshed.**
 Refreshing could rotate the token and log you out of Claude Code. Claudroom does
 write one item of its own — a private copy of the access token — because Claude
@@ -189,7 +200,7 @@ timestamps. A full backfill of 57 days takes about 35 seconds.
 | Symptom | Cause |
 |---|---|
 | Menu bar shows `—` | Cannot read the credential. Run `claude` once, then relaunch. |
-| Repeated password prompts | Claude Code reset its item's ACL. Enable *Launch at login* and leave Claudroom running. |
+| "Keychain access needed" in the popover | Claude Code refreshed its token, which drops Claudroom from its item's ACL. Press *Reconnect*. Claudroom never asks from a background poll, so this waits for you rather than interrupting. |
 | Prompt on every rebuild | No code-signing identity, so the app is ad-hoc signed and its identity changes each build. |
 | "Rate limited — backing off" | The usage endpoint's own anti-hammering limit, separate from your plan. Clears in minutes. |
 | Charts empty after loading history | Only first-party Claude models are counted; third-party and `<synthetic>` are excluded. |
@@ -197,7 +208,7 @@ timestamps. A full backfill of 57 days takes about 35 seconds.
 ## Development
 
 ```bash
-swift test                                              # 212 tests, no network, no Keychain
+swift test                                              # 213 tests, no network, no Keychain
 ./Scripts/bundle.sh release                             # build Claudroom.app
 swift run ClaudroomShot docs/screenshot.png --demo             # popover image
 swift run ClaudroomShot docs/dashboard.png --dashboard --demo  # dashboard image
