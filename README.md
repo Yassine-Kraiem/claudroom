@@ -30,6 +30,16 @@ would have covered you.
 
 ## Install
 
+### Download (no Xcode needed)
+
+Grab the latest `Claudroom-<version>.zip` from
+[Releases](https://github.com/Yassine-Kraiem/claudroom/releases), unzip it, move
+`Claudroom.app` to `/Applications` and open it. It is signed with a Developer ID
+and notarized by Apple, so it opens without a Gatekeeper warning. You still need
+macOS 14+ and Claude Code installed and signed in.
+
+### Build from source
+
 | Requirement | |
 |---|---|
 | macOS | 14+. Liquid Glass needs macOS 26; below that, a translucent material. |
@@ -50,8 +60,15 @@ to keep it running.
 No Apple developer certificate is required. Without one the build is ad-hoc
 signed, which works — but the app's identity then changes on every rebuild, so
 macOS asks for Keychain access again each time. If you have a certificate the
-script finds it automatically, or you can name one with
-`CLAUDROOM_SIGN_IDENTITY="Apple Development: …"`.
+script finds it automatically (preferring *Developer ID Application*), or you can
+name one with `CLAUDROOM_SIGN_IDENTITY="Apple Development: …"`.
+
+### Publishing a release
+
+`./Scripts/release.sh` builds, signs with Developer ID, notarizes, staples and
+zips to `build/Claudroom-<version>.zip`; add `--publish` to attach it to a new
+GitHub release. Setup instructions for notary credentials are at the top of the
+script. Bump `CFBundleShortVersionString` in `Resources/Info.plist` first.
 
 ## First run
 

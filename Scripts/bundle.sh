@@ -24,13 +24,24 @@ cp "$BIN" "$APP/Contents/MacOS/ClaudroomApp"
 # `identifier "..." and certificate leaf = H"..."`, which survives rebuilds.
 IDENTITY="${CLAUDROOM_SIGN_IDENTITY:-}"
 if [ -z "$IDENTITY" ]; then
-  IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
-    | grep -oE '"[^"]*"' | head -1 | tr -d '"')"
+  # Prefer Developer ID Application: it is the only certificate that lets the app
+  # run on someone else's Mac (after notarization, see Scripts/release.sh). Fall
+  # back to Apple Development, then to whatever else is in the keychain.
+  IDENTITIES="$(security find-identity -v -p codesigning 2>/dev/null | grep -oE '"[^"]*"' | tr -d '"')"
+  for prefix in "Developer ID Application:" "Apple Development:" ""; do
+    IDENTITY="$(printf '%s\n' "$IDENTITIES" | grep -m1 "^$prefix" || true)"
+    [ -n "$IDENTITY" ] && break
+  done
 fi
 
 if [ -n "$IDENTITY" ]; then
   echo "Signing as: $IDENTITY"
-  codesign --force --sign "$IDENTITY" "$APP"
+  if [[ "$IDENTITY" == "Developer ID Application:"* ]]; then
+    # Hardened runtime and a secure timestamp are both required for notarization.
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
+  else
+    codesign --force --sign "$IDENTITY" "$APP"
+  fi
 else
   echo "No signing identity found — falling back to ad-hoc."
   echo "The Keychain will re-prompt after every rebuild."
