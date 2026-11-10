@@ -45,9 +45,10 @@ public enum MenuBarGlyph {
 
     /// What the ring should show for a given label.
     ///
-    /// `remaining` is nil when there is no session to report, which draws the
-    /// track alone — an empty ring, matching the em dash in the text. Reporting a
-    /// full ring there would claim a fresh window that is not running.
+    /// The ring follows the number in the text: the session when one is running,
+    /// otherwise the week (the text then says `wk`). `remaining` is nil only when
+    /// there is neither, which draws the track alone — an empty ring, matching the
+    /// em dash. A full ring there would claim a fresh window that is not running.
     static func state(for label: MenuBarLabel) -> (remaining: Double?, warning: Bool, mode: Mode) {
         switch label {
         case .notSignedIn:
@@ -56,10 +57,10 @@ public enum MenuBarGlyph {
             return (nil, false, .dashed)
         case .noSession:
             return (nil, false, .gauge)
-        case .sessionActive(let remaining, _):
+        case .sessionActive(let remaining, _), .weekOnly(let remaining, _):
             return (remaining, false, .gauge)
-        case .weekClosingUnderused(let sessionRemaining, _, _):
-            return (sessionRemaining, true, .gauge)
+        case .weekClosingUnderused(let sessionRemaining, let weeklyRemaining, _):
+            return (sessionRemaining ?? weeklyRemaining, true, .gauge)
         }
     }
 

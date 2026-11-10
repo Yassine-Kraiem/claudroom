@@ -87,7 +87,8 @@ Claudroom: quit it, delete the `.app`, delete that folder.
 ## What it shows
 
 - **Capacity left** on both limiters — the weekly cap and the 5-hour window. The
-  menu bar always reports the **5-hour session**; weekly lives in the popover.
+  menu bar reports the **5-hour session**; when no session window is running, or
+  the API reports none, it shows the week instead, marked `wk` (e.g. `74% wk`).
 - **Per-model split**, read from Claude Code's transcripts. The API exposes only
   one scoped model and nulls the rest.
 - **Per-project split** — which projects consumed the capacity, attributed from

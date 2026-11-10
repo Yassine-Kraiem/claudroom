@@ -10,11 +10,12 @@ import ClaudroomCore
         [.notSignedIn,
          .stale,
          .noSession,
+         .weekOnly(remaining: 0.74, resetsAt: now),
          .sessionActive(remaining: 0.54, resetsAt: now),
          .weekClosingUnderused(sessionRemaining: 0.54, weeklyRemaining: 0.7, resetsAt: now)]
     }
 
-    /// The text is an em dash for four of the five states, so the mark is the only
+    /// The text is an em dash for three of the six states, so the mark is the only
     /// thing telling them apart. Stale and signed-out drew the same empty ring
     /// once already — one clears itself, the other needs `claude` login.
     @Test func everyStateIsVisuallyDistinct() {
@@ -35,13 +36,18 @@ import ClaudroomCore
         #expect(s.warning)
     }
 
-    /// An absent session must draw an empty ring, not a full one — a full ring
-    /// would claim a fresh window that is not actually running.
-    @Test func absentSessionIsEmptyNotFull() {
+    /// Nothing to report draws an empty ring, not a full one — a full ring would
+    /// claim a fresh window that is not actually running.
+    @Test func nothingToReportIsEmptyNotFull() {
         #expect(MenuBarGlyph.state(for: .noSession).remaining == nil)
+    }
+
+    /// Without a session the ring follows the week, as the `wk` text does.
+    @Test func absentSessionRingFollowsTheWeek() {
+        #expect(MenuBarGlyph.state(for: .weekOnly(remaining: 0.74, resetsAt: now)).remaining == 0.74)
         #expect(MenuBarGlyph.state(for: .weekClosingUnderused(sessionRemaining: nil,
                                                               weeklyRemaining: 0.7,
-                                                              resetsAt: now)).remaining == nil)
+                                                              resetsAt: now)).remaining == 0.7)
     }
 
     @Test func rendersAtMenuBarSizeForEveryState() {

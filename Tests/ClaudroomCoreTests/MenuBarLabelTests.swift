@@ -40,25 +40,40 @@ private func input(_ snap: UsageSnapshot?, stale: Bool = false,
             == .sessionActive(remaining: remaining, resetsAt: resets))
 }
 
-@Test func expiredSessionWindowReportsNoSession() {
+private let weekResets = now.addingTimeInterval(5 * 86400)
+
+@Test func expiredSessionWindowFallsBackToTheWeek() {
     let s = snapshot(five: 0.31, fiveResets: now.addingTimeInterval(-60),
-                     weekly: 0.14, weeklyResets: now.addingTimeInterval(5 * 86400))
-    #expect(MenuBarLabelSelector.select(input(s)) == .noSession)
+                     weekly: 0.14, weeklyResets: weekResets)
+    #expect(MenuBarLabelSelector.select(input(s)) == .weekOnly(remaining: 1 - 0.14, resetsAt: weekResets))
 }
 
-@Test func zeroSessionUsageReportsNoSession() {
+@Test func zeroSessionUsageFallsBackToTheWeek() {
     let s = snapshot(five: 0.0, fiveResets: now.addingTimeInterval(3600),
-                     weekly: 0.14, weeklyResets: now.addingTimeInterval(5 * 86400))
-    #expect(MenuBarLabelSelector.select(input(s)) == .noSession)
+                     weekly: 0.14, weeklyResets: weekResets)
+    #expect(MenuBarLabelSelector.select(input(s)) == .weekOnly(remaining: 1 - 0.14, resetsAt: weekResets))
 }
 
-/// The menu bar never reports the week as its number, however much of it is left.
-@Test func aHealthyWeekWithNoSessionIsStillADash() {
-    let s = snapshot(five: nil, fiveResets: nil,
-                     weekly: 0.14, weeklyResets: now.addingTimeInterval(5 * 86400))
+/// Some accounts get `five_hour: null` from the API for days. The menu bar must
+/// still show a number — the week's, marked so it is not read as the session.
+@Test func noFiveHourLimiterShowsTheWeekMarkedWk() {
+    let s = snapshot(five: nil, fiveResets: nil, weekly: 0.26, weeklyResets: weekResets)
+    let label = MenuBarLabelSelector.select(input(s))
+    #expect(label == .weekOnly(remaining: 1 - 0.26, resetsAt: weekResets))
+    #expect(label.text == "74% wk")
+    #expect(label.tooltip(now: now).contains("this week"))
+}
+
+@Test func noSessionAndNoWeekIsADash() {
+    let s = snapshot(five: nil, fiveResets: nil, weekly: nil, weeklyResets: nil)
     let label = MenuBarLabelSelector.select(input(s))
     #expect(label == .noSession)
     #expect(label.text == "\u{2014}")
+}
+
+@Test func closingWarningWithoutSessionShowsTheWeek() {
+    #expect(MenuBarLabel.weekClosingUnderused(sessionRemaining: nil, weeklyRemaining: 0.78,
+                                              resetsAt: now).text == "78% wk")
 }
 
 @Test func finalDayUnderThresholdShowsWarning() {
@@ -88,15 +103,15 @@ private func input(_ snap: UsageSnapshot?, stale: Bool = false,
 }
 
 @Test func finalDayOnTrackDoesNotWarn() {
-    let s = snapshot(five: nil, fiveResets: nil,
-                     weekly: 0.85, weeklyResets: now.addingTimeInterval(20 * 3600))
-    #expect(MenuBarLabelSelector.select(input(s)) == .noSession)
+    let resets = now.addingTimeInterval(20 * 3600)
+    let s = snapshot(five: nil, fiveResets: nil, weekly: 0.85, weeklyResets: resets)
+    #expect(MenuBarLabelSelector.select(input(s)) == .weekOnly(remaining: 1 - 0.85, resetsAt: resets))
 }
 
 @Test func warningDoesNotFireMoreThanADayOut() {
-    let s = snapshot(five: nil, fiveResets: nil,
-                     weekly: 0.10, weeklyResets: now.addingTimeInterval(3 * 86400))
-    #expect(MenuBarLabelSelector.select(input(s)) == .noSession)
+    let resets = now.addingTimeInterval(3 * 86400)
+    let s = snapshot(five: nil, fiveResets: nil, weekly: 0.10, weeklyResets: resets)
+    #expect(MenuBarLabelSelector.select(input(s)) == .weekOnly(remaining: 1 - 0.10, resetsAt: resets))
 }
 
 @Test func labelReportsRemainingNotSpend() {

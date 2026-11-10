@@ -12,14 +12,22 @@ import Foundation
 /// exists to catch, and it would be lost entirely if weekly moved out wholesale.
 /// It takes the icon; the number still reports the session.
 ///
+/// When no session figure exists — no window running, or the API not reporting a
+/// 5-hour limiter at all, as it does for some accounts — the slot falls back to
+/// the week, marked `wk` so the two can never be confused. A bare dash there
+/// left the menu bar empty for days on accounts with no 5-hour window.
+///
 /// Every case reports capacity *remaining*, never spend.
 public enum MenuBarLabel: Sendable, Equatable {
     case notSignedIn
     case stale
     /// A 5-hour window is running.
     case sessionActive(remaining: Double, resetsAt: Date)
-    /// No window running, so there is no session figure to report.
+    /// No window running, so there is no session figure to report, and no week
+    /// either.
     case noSession
+    /// No session figure; the week's remaining capacity stands in, labelled `wk`.
+    case weekOnly(remaining: Double, resetsAt: Date)
     /// The week closes soon with capacity unused. Shows the session number if a
     /// window happens to be running, a dash otherwise, and warns either way.
     case weekClosingUnderused(sessionRemaining: Double?,
@@ -46,8 +54,10 @@ public enum MenuBarLabel: Sendable, Equatable {
             return "—"
         case .sessionActive(let remaining, _):
             return "\(Self.pct(remaining)) left"
-        case .weekClosingUnderused(let sessionRemaining, _, _):
-            return sessionRemaining.map { "\(Self.pct($0)) left" } ?? "—"
+        case .weekOnly(let remaining, _):
+            return "\(Self.pct(remaining)) wk"
+        case .weekClosingUnderused(let sessionRemaining, let weeklyRemaining, _):
+            return sessionRemaining.map { "\(Self.pct($0)) left" } ?? "\(Self.pct(weeklyRemaining)) wk"
         }
     }
 
@@ -61,6 +71,8 @@ public enum MenuBarLabel: Sendable, Equatable {
             return "Data is stale"
         case .noSession:
             return "No 5-hour window running — open for weekly capacity"
+        case .weekOnly(let remaining, let resetsAt):
+            return "No 5-hour window running · \(Self.pct(remaining)) of this week left · resets in \(Self.shortRemaining(to: resetsAt, from: now))"
         case .sessionActive(let remaining, let resetsAt):
             return "\(Self.pct(remaining)) of the 5-hour window left · resets in \(Self.shortRemaining(to: resetsAt, from: now))"
         case .weekClosingUnderused(let sessionRemaining, let weeklyRemaining, let resetsAt):
@@ -118,6 +130,9 @@ public enum MenuBarLabelSelector {
 
         if let remaining = sessionRemaining, let resetsAt = sessionResetsAt {
             return .sessionActive(remaining: remaining, resetsAt: resetsAt)
+        }
+        if let weekly = snapshot.weekly, let resetsAt = weekly.resetsAt {
+            return .weekOnly(remaining: 1 - weekly.fraction, resetsAt: resetsAt)
         }
         return .noSession
     }

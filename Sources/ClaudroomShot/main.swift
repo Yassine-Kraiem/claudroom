@@ -42,6 +42,7 @@ func glyphSheet(to path: String) -> Int32 {
         ("session 54%", .sessionActive(remaining: 0.54, resetsAt: now)),
         ("session 12%", .sessionActive(remaining: 0.12, resetsAt: now)),
         ("no session",  .noSession),
+        ("week only",   .weekOnly(remaining: 0.74, resetsAt: now)),
         ("week closing", .weekClosingUnderused(sessionRemaining: 0.54,
                                                weeklyRemaining: 0.7, resetsAt: now)),
         ("stale",       .stale),
