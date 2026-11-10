@@ -168,25 +168,21 @@ hyphen or underscore cannot be recovered from it. Paths are rolled up to the
 project root, since `cwd` changes as you move around inside a session and would
 otherwise fragment one project across every directory visited.
 
-**The Keychain prompt only ever appears because you asked for it.** Claude Code
-rewrites its credential item whenever it refreshes its token, and the rewrite drops
-Claudroom from that item's ACL — so *Always Allow* genuinely does not stick, and
-authorisation is needed again every few hours. Claudroom keeps its own copy of the
-token to make that rare, but a copy still expires. The part that matters is *when*
-the request happens: background polls pass `kSecUseAuthenticationUISkip`, so they
-fail with `errSecInteractionNotAllowed` rather than putting a password dialog over
-whatever you were doing for an app you were not looking at.
+**Claudroom reads the token without a Keychain prompt.** Claude Code writes its
+credential item through Apple's `/usr/bin/security` tool, so the item's ACL
+trusts that tool — and keeps trusting it across every token refresh, because each
+rewrite goes through the same tool. Claudroom reads the item by running
+`security find-generic-password` (measured: ~0.2s, no dialog, even right after a
+refresh). That is why *Always Allow* no longer needs repeating.
 
-The mechanism is `SecKeychainSetUserInteractionAllowed(false)`, not the
-modern-looking `kSecUseAuthenticationUI`. That one gates `kSecAccessControl`
-prompts — Touch ID, passcode — and does nothing for a legacy SecKeychain ACL,
-whose dialog predates it. Measured against this exact item: with
-`kSecUseAuthenticationUISkip` the read drew a dialog and returned after 12.6
-seconds; with user interaction disallowed it returned in 9ms and drew nothing.
-`swift run ClaudroomShot --keychain-check` re-runs that measurement against the
-shipping function. The popover shows
-*Keychain access needed* instead, and the dialog appears only when you press
-*Reconnect*.
+If that path ever stops working — say Claude Code changes how it stores the item
+— a stalled `security` read is cut off after 2 seconds and Claudroom falls back to
+reading through the Security framework. That path's ACL *is* reset by every
+refresh, so it never prompts from a background poll: it uses
+`SecKeychainSetUserInteractionAllowed(false)` (not `kSecUseAuthenticationUI`,
+which only gates Touch ID/passcode prompts and does nothing for a legacy ACL), and
+the popover shows *Keychain access needed* with a *Reconnect* button instead.
+`swift run ClaudroomShot --keychain-check` exercises the shipping read.
 
 **Claude Code's credential is read-only and no token is ever refreshed.**
 Refreshing could rotate the token and log you out of Claude Code. Claudroom does

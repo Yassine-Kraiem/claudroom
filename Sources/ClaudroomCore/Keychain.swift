@@ -85,6 +85,15 @@ public enum Keychain {
         // Deprecated since 10.10 with no replacement for legacy ACL items, and
         // process-global — hence the defer, so one background read cannot leave
         // every later Keychain call unable to ask.
+        // First choice: Apple's own `security` tool. Claude Code writes this item
+        // through that tool, so the item's ACL trusts /usr/bin/security — and
+        // keeps trusting it across every token refresh, because each rewrite is
+        // done by the same tool. Measured: 0.15s, no dialog, on an item whose ACL
+        // had just dropped Claudroom. This is what removes the Reconnect step.
+        if let blob = readViaSecurityTool() {
+            return try parse(blob: blob)
+        }
+
         if !allowInteraction { setInteractionAllowed(false) }
         defer {
             if !allowInteraction { setInteractionAllowed(true) }
@@ -103,5 +112,54 @@ public enum Keychain {
             throw KeychainError.notFound
         }
         return try parse(blob: data)
+    }
+
+    /// Set once the `security` tool is seen to stall — the sign that its read is
+    /// waiting on a dialog, i.e. Claude Code no longer writes the item through it.
+    /// From then on this run uses the Security framework path only, so a
+    /// background poll never stalls on that dialog twice.
+    nonisolated(unsafe) private static var securityToolUnavailable = false
+    private static let securityToolTimeout: TimeInterval = 2
+
+    /// Reads the item through `/usr/bin/security`, or returns nil to fall back.
+    ///
+    /// A trusted read finishes in well under a second. If the tool is *not*
+    /// trusted it would sit behind an authorisation dialog, so it gets a short
+    /// deadline: on expiry the process is terminated (taking the dialog with it)
+    /// and the path is switched off for the rest of the run.
+    static func readViaSecurityTool() -> Data? {
+        guard !securityToolUnavailable else { return nil }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        process.arguments = ["find-generic-password", "-s", service, "-w"]
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = FileHandle.nullDevice
+        process.standardInput = FileHandle.nullDevice
+
+        let done = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in done.signal() }
+        do { try process.run() } catch { securityToolUnavailable = true; return nil }
+
+        // Drain the pipe while waiting, so a large item cannot fill the buffer
+        // and deadlock the child.
+        let reader = DispatchQueue(label: "claudroom.security-tool")
+        nonisolated(unsafe) var data = Data()
+        let drained = DispatchSemaphore(value: 0)
+        reader.async {
+            data = out.fileHandleForReading.readDataToEndOfFile()
+            drained.signal()
+        }
+
+        if done.wait(timeout: .now() + securityToolTimeout) == .timedOut {
+            process.terminate()
+            securityToolUnavailable = true
+            return nil
+        }
+        drained.wait()
+        guard process.terminationStatus == 0 else { return nil }
+        // `-w` prints the secret followed by a newline.
+        while data.last == 0x0A { data.removeLast() }
+        return data.isEmpty ? nil : data
     }
 }
